@@ -72,19 +72,6 @@ streamlit run app.py
 # → http://localhost:8501
 ```
 
----
-
-## Deploy on Streamlit Community Cloud
-
-1. Fork this repo (or use it directly).
-2. Go to [share.streamlit.io](https://share.streamlit.io) → **New app**.
-3. Pick `<your-user>/HopeEnough-app`, branch `main`, main file `app.py`.
-4. Click **Deploy**. Every push to `main` auto-redeploys.
-
-No secrets, no database, no paid tier needed.
-
----
-
 ## Repository structure
 
 ```text
