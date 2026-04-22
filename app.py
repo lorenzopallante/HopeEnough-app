@@ -37,7 +37,8 @@ st.set_page_config(
 
 # ── Cached loaders ───────────────────────────────────────────────────────
 @st.cache_resource
-def load_pipe(model_filename: str):
+def load_pipe(model_filename: str, _file_mtime: float):
+    # _file_mtime is a cache-busting key: any file change invalidates the cache.
     return joblib.load(MODEL_DIR / model_filename)
 
 
@@ -79,7 +80,7 @@ threshold = st.sidebar.slider(
          "Use the `optimal_threshold` from run_log.json for Youden's J.",
 )
 
-pipe = load_pipe(model_choice)
+pipe = load_pipe(model_choice, (MODEL_DIR / model_choice).stat().st_mtime)
 FEATURES = required_features(pipe)
 
 st.sidebar.caption(f"Model expects {len(FEATURES)} features: {', '.join(FEATURES)}")
