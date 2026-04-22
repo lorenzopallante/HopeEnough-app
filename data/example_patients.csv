@@ -1,6 +1,6 @@
-patient_id,life_supp,cit_real,meld_na,status_pre,macro_15
-P001,0,300,10,home,0
-P002,0,380,15,hospital,0
-P003,0,470,22,hospital,1
-P004,1,520,32,ICU,1
-P005,0,,18,home,0
+patient_id,life_supp,cit_real,meld_na,macro_30
+P001,0,300,10,0
+P002,0,380,15,0
+P003,0,470,22,0
+P004,1,520,32,1
+P005,0,,18,0

@@ -5,7 +5,7 @@ Run locally:
     streamlit run app.py
 
 Deploy on Streamlit Community Cloud: https://share.streamlit.io
-  1. Push this repo (incl. results/selected5_v1/models/*.joblib) to GitHub
+  1. Push this repo (incl. model/LR_full.joblib) to GitHub
   2. "New app" → pick the repo → main file: app.py
   3. Deploy. Free, auto-redeploys on every push.
 """
@@ -50,13 +50,6 @@ def required_features(pipe) -> list[str]:
     return feats
 
 
-def status_pre_categories(pipe) -> list[str]:
-    for name, tpipe, _ in pipe.named_steps["preprocessor"].transformers_:
-        if name == "cat":
-            return list(tpipe.named_steps["onehot"].categories_[0])
-    return ["home", "hospital", "ICU", "RIA"]
-
-
 def risk_colour(proba: float) -> str:
     if proba >= 0.66:
         return "#e74c3c"
@@ -88,7 +81,6 @@ threshold = st.sidebar.slider(
 
 pipe = load_pipe(model_choice)
 FEATURES = required_features(pipe)
-CATS     = status_pre_categories(pipe)
 
 st.sidebar.caption(f"Model expects {len(FEATURES)} features: {', '.join(FEATURES)}")
 
@@ -121,16 +113,11 @@ with tab_single:
                 format_func=lambda v: "No" if v == 0 else "Yes",
                 horizontal=True,
             )
-            macro_15 = st.radio(
-                "Macrosteatosis ≥ 15% (`macro_15`)",
+            macro_30 = st.radio(
+                "Macrosteatosis ≥ 30% (`macro_30`)",
                 options=[0, 1],
-                format_func=lambda v: "< 15%" if v == 0 else "≥ 15%",
+                format_func=lambda v: "< 30%" if v == 0 else "≥ 30%",
                 horizontal=True,
-            )
-            status_pre = st.selectbox(
-                "Pre-LT location (`status_pre`)",
-                options=CATS,
-                index=CATS.index("home") if "home" in CATS else 0,
             )
 
         with c2:
@@ -148,11 +135,10 @@ with tab_single:
 
     if submitted:
         row = pd.DataFrame([{
-            "life_supp":  life_supp,
-            "cit_real":   cit_real,
-            "meld_na":    meld_na,
-            "status_pre": status_pre,
-            "macro_15":   macro_15,
+            "life_supp": life_supp,
+            "cit_real":  cit_real,
+            "meld_na":   meld_na,
+            "macro_30":  macro_30,
         }])[FEATURES]
 
         proba = float(pipe.predict_proba(row)[0, 1])
