@@ -1,0 +1,15 @@
+{
+  "method": "logistic",
+  "intercept": -1.8249148115160811,
+  "slope": 0.9298627445705354,
+  "formula": "p_cal = sigmoid(intercept + slope * logit(p_raw))",
+  "exported_at": "2026-04-24T20:08:33",
+  "meta": {
+    "source_experiment": "selected4_v2",
+    "winner_selection": "brier",
+    "test_brier": 0.1117,
+    "test_cox_slope": 0.9154,
+    "test_cox_intercept": -0.0721,
+    "train_prevalence": 0.1345
+  }
+}

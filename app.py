@@ -10,6 +10,7 @@ Deploy on Streamlit Community Cloud: https://share.streamlit.io
   3. Deploy. Free, auto-redeploys on every push.
 """
 
+import json
 from pathlib import Path
 
 import joblib
@@ -40,6 +41,41 @@ st.set_page_config(
 def load_pipe(model_filename: str, _file_mtime: float):
     # _file_mtime is a cache-busting key: any file change invalidates the cache.
     return joblib.load(MODEL_DIR / model_filename)
+
+
+@st.cache_resource
+def load_calibrator(calibrator_filename: str, _file_mtime: float | None):
+    """Load a portable JSON calibrator. Returns None if file is absent."""
+    path = MODEL_DIR / calibrator_filename
+    if not path.exists():
+        return None
+    return json.loads(path.read_text())
+
+
+def apply_calibration(p_raw: np.ndarray, cal: dict | None) -> np.ndarray:
+    """Apply the calibration formula encoded in the JSON.
+
+    Rationale: the underlying LR was trained with class_weight='balanced',
+    which produces probabilities on a fictitious 50/50 prior. The calibrator
+    (fitted via logistic or beta recalibration on OOF predictions) maps those
+    raw scores back to real poor-outcome frequencies. Method and parameters
+    are published in the JSON alongside the model. See upstream HopeEnough
+    repo, src/calibration.py, and Ojeda et al. 2023 (PMID 37849356).
+    """
+    p_raw = np.asarray(p_raw, dtype=float)
+    if cal is None:
+        return p_raw
+    EPS = 1e-6
+    p = np.clip(p_raw, EPS, 1.0 - EPS)
+    if cal["method"] == "logistic":
+        z = cal["intercept"] + cal["slope"] * np.log(p / (1.0 - p))
+    elif cal["method"] == "beta":
+        z = (cal["intercept"]
+             + cal["coef_log_s"] * np.log(p)
+             - cal["coef_neg_log_1ms"] * np.log(1.0 - p))
+    else:
+        return p_raw
+    return 1.0 / (1.0 + np.exp(-z))
 
 
 def required_features(pipe) -> list[str]:
@@ -83,7 +119,25 @@ threshold = st.sidebar.slider(
 pipe = load_pipe(model_choice, (MODEL_DIR / model_choice).stat().st_mtime)
 FEATURES = required_features(pipe)
 
+# Load companion calibrator: same basename with "_full" dropped + "_calibrator.json".
+# e.g. "LR_full.joblib" → "LR_calibrator.json". Absence = uncalibrated deployment.
+cal_filename = Path(model_choice).stem.replace("_full", "") + "_calibrator.json"
+cal_path = MODEL_DIR / cal_filename
+calibrator = load_calibrator(
+    cal_filename,
+    cal_path.stat().st_mtime if cal_path.exists() else None,
+)
+
 st.sidebar.caption(f"Model expects {len(FEATURES)} features: {', '.join(FEATURES)}")
+if calibrator is not None:
+    meta = calibrator.get("meta", {})
+    st.sidebar.caption(
+        f"Probabilities calibrated via **{calibrator['method']}** recalibration "
+        f"(train prevalence: {meta.get('train_prevalence', '—')})."
+    )
+else:
+    st.sidebar.caption(":warning: No calibrator — probabilities are on the raw "
+                       "training scale (not interpretable as real frequencies).")
 
 
 # ── Header ───────────────────────────────────────────────────────────────
@@ -142,7 +196,8 @@ with tab_single:
             "macro_30":  macro_30,
         }])[FEATURES]
 
-        proba = float(pipe.predict_proba(row)[0, 1])
+        proba_raw = float(pipe.predict_proba(row)[0, 1])
+        proba = float(apply_calibration(np.array([proba_raw]), calibrator)[0])
         pred  = int(proba >= threshold)
         colour = risk_colour(proba)
         label  = "POOR OUTCOME predicted" if pred == 1 else "no poor outcome predicted"
@@ -202,7 +257,8 @@ with tab_batch:
 
         st.write(f"Loaded **{len(df_in)}** patient(s).")
 
-        proba = pipe.predict_proba(df_in[FEATURES])[:, 1]
+        proba_raw = pipe.predict_proba(df_in[FEATURES])[:, 1]
+        proba = apply_calibration(proba_raw, calibrator)
         pred  = (proba >= threshold).astype(int)
 
         df_out = df_in.copy()
