@@ -52,7 +52,8 @@ def load_calibrator(calibrator_filename: str, _file_mtime: float | None):
     return json.loads(path.read_text())
 
 
-def apply_calibration(p_raw: np.ndarray, cal: dict | None) -> np.ndarray:
+def apply_calibration(p_raw: np.ndarray, cal: dict | None,
+                       override_prevalence: float | None = None) -> np.ndarray:
     """Apply the calibration formula encoded in the JSON.
 
     Rationale: the underlying LR was trained with class_weight='balanced',
@@ -61,6 +62,14 @@ def apply_calibration(p_raw: np.ndarray, cal: dict | None) -> np.ndarray:
     raw scores back to real poor-outcome frequencies. Method and parameters
     are published in the JSON alongside the model. See upstream HopeEnough
     repo, src/calibration.py, and Ojeda et al. 2023 (PMID 37849356).
+
+    If `override_prevalence` is given and differs from the training prevalence
+    (cal['meta']['train_prevalence']), an additional log-odds shift is applied
+    to move predictions onto a new population prior. This implements the
+    King-Zeng prior correction for recalibration-in-the-large — useful when
+    the app is applied to a center whose poor-outcome rate differs from the
+    training population. Ranking among patients is preserved; only the
+    absolute level shifts.
     """
     p_raw = np.asarray(p_raw, dtype=float)
     if cal is None:
@@ -75,6 +84,18 @@ def apply_calibration(p_raw: np.ndarray, cal: dict | None) -> np.ndarray:
              - cal["coef_neg_log_1ms"] * np.log(1.0 - p))
     else:
         return p_raw
+
+    # Optional: shift predictions to a different target prevalence.
+    if override_prevalence is not None:
+        pi_train = cal.get("meta", {}).get("train_prevalence")
+        if pi_train is not None and 0.0 < float(override_prevalence) < 1.0:
+            pi_train = float(pi_train)
+            pi_new = float(override_prevalence)
+            if abs(pi_new - pi_train) > 1e-6:
+                shift = (np.log(pi_new / (1.0 - pi_new))
+                         - np.log(pi_train / (1.0 - pi_train)))
+                z = z + shift
+
     return 1.0 / (1.0 + np.exp(-z))
 
 
@@ -139,6 +160,48 @@ else:
     st.sidebar.caption(":warning: No calibrator — probabilities are on the raw "
                        "training scale (not interpretable as real frequencies).")
 
+# ── Sidebar: local recalibration (prevalence shift) ──────────────────────
+st.sidebar.markdown("---")
+st.sidebar.subheader("Local recalibration")
+
+train_prev: float | None = None
+if calibrator is not None:
+    train_prev = calibrator.get("meta", {}).get("train_prevalence")
+
+if calibrator is not None and train_prev is not None:
+    default_pct = float(train_prev) * 100.0
+    local_pct = st.sidebar.number_input(
+        "Local population prevalence (%)",
+        min_value=0.5, max_value=50.0,
+        value=default_pct, step=0.5, format="%.1f",
+        help=("If your target population has a different poor-outcome rate "
+              "than the training population, enter it here. The app will "
+              "shift every calibrated probability onto the new prior (King-"
+              "Zeng recalibration-in-the-large). Assumes equal discrimination "
+              "across populations — see README for the full protocol."),
+    )
+    local_prev = local_pct / 100.0
+    shift_active = abs(local_prev - float(train_prev)) > 1e-4
+    if shift_active:
+        delta = (np.log(local_prev / (1.0 - local_prev))
+                 - np.log(float(train_prev) / (1.0 - float(train_prev))))
+        st.sidebar.caption(
+            f":warning: Shifting from **{float(train_prev)*100:.1f}%** "
+            f"(training) to **{local_pct:.1f}%** "
+            f"(log-odds shift {delta:+.2f}). Rankings unchanged; "
+            f"absolute levels scaled."
+        )
+    else:
+        st.sidebar.caption(
+            f"At training prevalence — no shift applied. "
+            f"Set a different value to transport predictions."
+        )
+else:
+    local_prev = None
+    st.sidebar.caption(
+        "Not available: model is deployed without a calibrator."
+    )
+
 
 # ── Header ───────────────────────────────────────────────────────────────
 st.title("HopeEnough")
@@ -197,7 +260,10 @@ with tab_single:
         }])[FEATURES]
 
         proba_raw = float(pipe.predict_proba(row)[0, 1])
-        proba = float(apply_calibration(np.array([proba_raw]), calibrator)[0])
+        proba = float(apply_calibration(
+            np.array([proba_raw]), calibrator,
+            override_prevalence=local_prev,
+        )[0])
         pred  = int(proba >= threshold)
         colour = risk_colour(proba)
         label  = "POOR OUTCOME predicted" if pred == 1 else "no poor outcome predicted"
@@ -258,7 +324,10 @@ with tab_batch:
         st.write(f"Loaded **{len(df_in)}** patient(s).")
 
         proba_raw = pipe.predict_proba(df_in[FEATURES])[:, 1]
-        proba = apply_calibration(proba_raw, calibrator)
+        proba = apply_calibration(
+            proba_raw, calibrator,
+            override_prevalence=local_prev,
+        )
         pred  = (proba >= threshold).astype(int)
 
         df_out = df_in.copy()
