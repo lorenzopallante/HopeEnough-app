@@ -116,7 +116,7 @@ def risk_colour(proba: float) -> str:
     return "#2ecc71"
 
 
-# ── Sidebar: model & threshold ───────────────────────────────────────────
+# ── Sidebar: model ───────────────────────────────────────────────────────
 st.sidebar.title("Model")
 
 available_models = sorted(p.name for p in MODEL_DIR.glob("*_full.joblib")) \
@@ -129,12 +129,6 @@ model_choice = st.sidebar.selectbox(
     options=available_models,
     index=default_idx,
     help="`*_full.joblib` artifacts are refit on the entire dataset.",
-)
-threshold = st.sidebar.slider(
-    "Decision threshold",
-    min_value=0.05, max_value=0.95, value=0.50, step=0.01,
-    help="Probability ≥ threshold → predicted poor outcome. "
-         "Use the `optimal_threshold` from run_log.json for Youden's J.",
 )
 
 pipe = load_pipe(model_choice, (MODEL_DIR / model_choice).stat().st_mtime)
@@ -264,9 +258,7 @@ with tab_single:
             np.array([proba_raw]), calibrator,
             override_prevalence=local_prev,
         )[0])
-        pred  = int(proba >= threshold)
         colour = risk_colour(proba)
-        label  = "POOR OUTCOME predicted" if pred == 1 else "no poor outcome predicted"
 
         st.markdown(
             f"""
@@ -277,9 +269,6 @@ with tab_single:
               </div>
               <div style="font-size:42px; font-weight:700; color:{colour}; line-height:1.1">
                   {proba:.1%}
-              </div>
-              <div style="font-size:14px; color:#333; margin-top:4px">
-                  at threshold <b>{threshold:.2f}</b> → <b>{label}</b>
               </div>
             </div>
             """,
@@ -328,25 +317,22 @@ with tab_batch:
             proba_raw, calibrator,
             override_prevalence=local_prev,
         )
-        pred  = (proba >= threshold).astype(int)
 
         df_out = df_in.copy()
         df_out["predicted_proba"] = np.round(proba, 4)
-        df_out["predicted_class"] = pred
-        df_out["threshold_used"]  = threshold
 
         st.dataframe(
-            df_out.style.format({"predicted_proba": "{:.3f}",
-                                  "threshold_used":  "{:.2f}"})
+            df_out.style.format({"predicted_proba": "{:.3f}"})
                         .background_gradient(subset=["predicted_proba"],
                                               cmap="RdYlGn_r", vmin=0, vmax=1),
             hide_index=True,
             width="stretch",
         )
 
-        n_pos = int(pred.sum())
-        st.info(f"Predicted poor outcome: **{n_pos} / {len(df_in)}** "
-                f"({n_pos/len(df_in)*100:.1f}%) at threshold {threshold:.2f}.")
+        st.info(
+            f"Mean predicted probability of poor outcome across "
+            f"**{len(df_in)}** patient(s): **{proba.mean():.1%}**."
+        )
 
         st.download_button(
             "📥 Download predictions (CSV)",
