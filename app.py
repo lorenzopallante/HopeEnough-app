@@ -346,6 +346,5 @@ with tab_batch:
 st.divider()
 st.caption(
     "Source: github.com/lorenzopallante/HopeEnough · "
-    "Model: LR / DT / RF refit on 476 HOPE/DHOPE liver transplant cases "
-    "(data_anonym_v3_clean)."
+    "Model: LR / DT / RF refit on 476 HOPE/DHOPE liver transplant cases."
 )
