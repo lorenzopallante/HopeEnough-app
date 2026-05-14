@@ -6,8 +6,6 @@ Streamlit app that predicts **poor outcome** for liver transplant recipients aft
 
 Enter the four pre/intra-operative features for one patient — or upload a CSV with a whole cohort — and the app returns the predicted probability from a calibrated logistic-regression pipeline fitted on 476 HOPE/DHOPE transplants.
 
-**⚠️ Research tool — not for clinical use.**
-
 ---
 
 ## 🌐 Live demo

@@ -201,7 +201,7 @@ else:
 st.title("HopeEnough")
 st.caption(
     "Poor-outcome prediction for liver transplant recipients after HOPE/DHOPE "
-    "machine perfusion. **Research tool — not for clinical use.**"
+    "machine perfusion."
 )
 
 
@@ -347,5 +347,5 @@ st.divider()
 st.caption(
     "Source: github.com/lorenzopallante/HopeEnough · "
     "Model: LR / DT / RF refit on 476 HOPE/DHOPE liver transplant cases "
-    "(data_anonym_v3_clean). Research only."
+    "(data_anonym_v3_clean)."
 )
