@@ -220,13 +220,13 @@ with tab_single:
 
         with c1:
             life_supp = st.radio(
-                "Life support pre-LT (`life_supp`)",
+                "Life support pre-LT",
                 options=[0, 1],
                 format_func=lambda v: "No" if v == 0 else "Yes",
                 horizontal=True,
             )
             macro_30 = st.radio(
-                "Macrosteatosis ≥ 30% (`macro_30`)",
+                "Macrosteatosis ≥ 30%",
                 options=[0, 1],
                 format_func=lambda v: "< 30%" if v == 0 else "≥ 30%",
                 horizontal=True,
@@ -234,11 +234,11 @@ with tab_single:
 
         with c2:
             cit_real = st.slider(
-                "Cold ischemia time (`cit_real`, min)",
+                "Cold ischemia time (min)",
                 min_value=60, max_value=700, value=350, step=5,
             )
             meld_na = st.slider(
-                "MELD-Na score (`meld_na`)",
+                "MELD-Na score",
                 min_value=6, max_value=53, value=14, step=1,
             )
 
